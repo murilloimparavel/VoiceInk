@@ -2,7 +2,8 @@ import SwiftUI
 
 struct DictionarySettingsView: View {
     @State private var selectedSection: DictionarySection = .replacements
-    @State private var isShowingSettings = false
+    @State private var activePanel: DictionaryPanel?
+    @AppStorage(AutoLearnSettings.hasFailureKey) private var hasAutoLearnFailure = false
     private let dictionaryInfoMessage: LocalizedStringKey =
         "Word Replacements run after transcription. Vocabulary helps supported transcription models and AI enhancement recognize names, technical terms, and unique spellings."
 
@@ -35,6 +36,11 @@ struct DictionarySettingsView: View {
         }
     }
 
+    private enum DictionaryPanel: Equatable {
+        case settings
+        case autoLearnFailure
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerSection
@@ -52,16 +58,44 @@ struct DictionarySettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 600, minHeight: 500)
-        .sidePanel(isPresented: $isShowingSettings) {
-            DictionarySettingsPanel {
-                isShowingSettings = false
+        .sidePanel(
+            isPresented: Binding(
+                get: { activePanel != nil },
+                set: { if !$0 { activePanel = nil } }
+            )
+        ) {
+            switch activePanel {
+            case .settings:
+                DictionarySettingsPanel {
+                    activePanel = nil
+                }
+            case .autoLearnFailure:
+                AutoLearnFailurePanel {
+                    activePanel = nil
+                }
+            case nil:
+                EmptyView()
             }
         }
     }
 
     private var headerSection: some View {
-        AppScreenHeader(title: "Dictionary", infoMessage: dictionaryInfoMessage) {
-            settingsButton
+        AppScreenHeader(
+            title: "Dictionary",
+            infoMessage: dictionaryInfoMessage,
+            infoURL: "https://tryvoiceink.com/docs/auto-learn-dictionary"
+        ) {
+            HStack(spacing: 8) {
+                if hasAutoLearnFailure {
+                    AppIconButton(
+                        systemName: "exclamationmark.triangle.fill",
+                        help: "Dictionary Auto Learn failed"
+                    ) {
+                        activePanel = .autoLearnFailure
+                    }
+                }
+                settingsButton
+            }
         }
     }
 
@@ -70,7 +104,7 @@ struct DictionarySettingsView: View {
             systemName: "gearshape.fill",
             help: "Dictionary Settings"
         ) {
-            isShowingSettings.toggle()
+            activePanel = activePanel == .settings ? nil : .settings
         }
     }
 
