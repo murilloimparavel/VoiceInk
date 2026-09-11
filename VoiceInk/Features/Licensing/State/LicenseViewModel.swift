@@ -73,12 +73,8 @@ final class LicenseViewModel: ObservableObject {
         self.automaticallyRetriesStorage = automaticallyRetriesStorage
         self.automaticallyRefreshesTime = automaticallyRefreshesTime
 
-        #if LOCAL_BUILD
-            isPersistentStateAvailable = true
-            licenseState = .licensed
-        #else
-            loadPersistentState()
-        #endif
+        isPersistentStateAvailable = true
+        licenseState = .licensed
     }
 
     deinit {
@@ -142,36 +138,19 @@ final class LicenseViewModel: ObservableObject {
     }
 
     var isLicensed: Bool {
-        licenseState == .licensed
+        true
     }
 
     var hasVerifiedLicense: Bool {
-        #if LOCAL_BUILD
-            true
-        #else
-            isPersistentStateAvailable && storedLicenseKey != nil && licenseState == .licensed
-        #endif
+        true
     }
 
     var canUseApp: Bool {
-        switch licenseState {
-        case .licensed, .trial:
-            return true
-        case .unlicensed, .trialExpired:
-            return false
-        }
+        true
     }
 
     var usageRestrictionMessage: String? {
-        switch licenseState {
-        case .unlicensed, .trialExpired:
-            return String(
-                format: String(localized: "Your trial has ended. Upgrade to VoiceInk Pro at %@"),
-                "tryvoiceink.com/buy"
-            )
-        case .trial, .licensed:
-            return nil
-        }
+        nil
     }
 
     var diagnosticLicenseStatus: String {
@@ -459,28 +438,7 @@ final class LicenseViewModel: ObservableObject {
     }
 
     private func resolvedState(at date: Date) -> LicenseState {
-        #if LOCAL_BUILD
-            return .licensed
-        #endif
-
-        if storedLicenseKey != nil,
-            activationId != nil || !requiresActivation
-        {
-            return .licensed
-        }
-
-        guard let trialStartDate else {
-            return .unlicensed
-        }
-
-        let rawDays = Calendar.current.dateComponents([.day], from: trialStartDate, to: date).day ?? 0
-        let daysSinceTrialStart = max(0, rawDays)
-
-        if daysSinceTrialStart >= trialPeriodDays {
-            return .trialExpired
-        }
-
-        return .trial(daysRemaining: min(trialPeriodDays, trialPeriodDays - daysSinceTrialStart))
+        return .licensed
     }
 
     private func scheduleStorageRetryIfNeeded() {
