@@ -94,13 +94,45 @@ Por padrão, nos teclados Apple modernos (MacBook, Magic Keyboard), a tecla `Fn`
 
 Quando o macOS intercepta esse evento em nível de kernel/WindowServer, a tecla pode nunca chegar ao `CGEventTap` do VoiceInk ou causar concorrência direta com o motor de ditado da Apple.
 
-### Como Liberar a Tecla Fn/Globo para o VoiceInk
+### Como Liberar a Tecla Fn/Globo via Interface Gráfica
 1. Abra os **Ajustes do Sistema**.
 2. Navegue até **Teclado**.
 3. Localize o menu suspenso **"Pressionar tecla 🌐 para"** (ou *"Press 🌐 key to"*).
 4. Altere a seleção para **"Não Fazer Nada"** (*Do Nothing*).
 
 Após esse ajuste, a tecla `Fn`/`🌐` poderá ser capturada exclusivamente pelo VoiceInk sem interferências.
+
+### Liberação Programática via Terminal
+
+Caso prefira automatizar a configuração via scripts de setup ou dotfiles, é possível desativar os comportamentos conflitantes do sistema diretamente via linha de comando:
+
+1. **Definir a tecla Fn/Globo para "Não Fazer Nada" (*Do Nothing*):**
+   ```bash
+   defaults write com.apple.HIToolbox AppleFnUsageType -int 0
+   ```
+   * O valor `-int 0` configura o subsistema de entrada (`com.apple.HIToolbox`) para ignorar o toque isolado na tecla `Fn`/Globo (`🌐`), evitando a abertura de seletores de emojis ou funções globais do macOS.
+
+2. **Desativar o atalho interno de Ditado do macOS (Hotkey 164):**
+   ```bash
+   /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:164:enabled false" ~/Library/Preferences/com.apple.symbolichotkeys.plist 2>/dev/null || \
+   /usr/libexec/PlistBuddy -c "Add :AppleSymbolicHotKeys:164:enabled bool false" ~/Library/Preferences/com.apple.symbolichotkeys.plist
+   ```
+   * **Por que o Hotkey 164?** O **Hotkey 164** no arquivo `~/Library/Preferences/com.apple.symbolichotkeys.plist` é o atalho simbólico interno do macOS responsável por disparar o Ditado nativo (*Start Dictation*) usando o modificador `Fn` (código de modificador `8388608`).
+   * Desativá-lo (`enabled = false`) impede que o sistema operacional abra ou reserve o Ditado da Apple ao pressionar `Fn`, liberando a tecla inteiramente para ser interceptada pelo `CGEventTap` do VoiceInk.
+
+3. **Aplicar as alterações imediatamente sem reiniciar:**
+   ```bash
+   /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+   ```
+
+* **Consultar o status atual das preferências:**
+  ```bash
+  # Consultar o comportamento da tecla Fn/Globo (0 = Não Fazer Nada)
+  defaults read com.apple.HIToolbox AppleFnUsageType
+
+  # Consultar se o Hotkey 164 (Ditado nativo) está habilitado
+  /usr/libexec/PlistBuddy -c "Print :AppleSymbolicHotKeys:164:enabled" ~/Library/Preferences/com.apple.symbolichotkeys.plist 2>/dev/null
+  ```
 
 ### Recomendações de Atalhos Alternativos Livres de Conflito
 Se você utiliza a tecla `Fn`/`🌐` para emojis ou prefere não alterar o comportamento nativo do teclado do macOS, configure um atalho customizado no VoiceInk. As combinações a seguir oferecem ergonomia excelente e baixíssimo índice de conflito:
