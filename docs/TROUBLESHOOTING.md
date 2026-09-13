@@ -212,3 +212,62 @@ O motor Whisper executado nativamente em C++ oferece alta fidelidade na pontuaç
 2. Localize **Parakeet V3** ou o modelo **Whisper** de sua preferência.
 3. Clique em **Baixar** para efetuar o download dos pesos do modelo localmente.
 4. Após a conclusão do download, defina-o como o modelo ativo de transcrição.
+
+---
+
+## 6. Armazenamento de Chaves de API de IA e Erro -34018 no Keychain
+
+### Sintoma
+Ao inserir uma chave de API de serviços de nuvem ou IA (como Groq, OpenAI, Anthropic, Gemini, Deepgram) na interface gráfica do VoiceInk e clicar em **"Verificar"** / **"Salvar"**, a chave não é persistida (o campo pode voltar a ficar vazio após fechar ou reiniciar o app) e nos logs do macOS / Console aparece o seguinte erro:
+
+```text
+Failed to update keychain item for key: groqAPIKey, status: -34018
+```
+(ou identificadores correlatos como `openAIAPIKey`, `anthropicAPIKey`, etc., acompanhados do código de status `-34018`).
+
+### Causa Técnica
+O código original do VoiceInk foi configurado para interagir com a API de Keychain do macOS utilizando parâmetros restritivos:
+* `kSecUseDataProtectionKeychain = true`
+* `kSecAttrSynchronizable = true`
+
+No ecossistema macOS / iOS, essas duas propriedades ativam o **Data Protection Keychain** com suporte à sincronização de credenciais via iCloud Keychain. No entanto, o subsistema `securityd` do macOS exige obrigatoriamente uma assinatura digital emitida por uma conta corporativa da Apple (*Apple Developer Program*) com um Team ID provisionado e os respectivos *entitlements* (`keychain-access-groups` / `com.apple.developer.keychain-sync`).
+
+Quando o aplicativo é compilado localmente ou re-assinado de forma *ad-hoc* (`codesign -f -s - ...`), o macOS detecta a ausência desses entitlements autorizados e rejeita sumariamente qualquer tentativa de escrita no Keychain, retornando o código de erro:
+```text
+errSecMissingEntitlement = -34018
+```
+
+### Resolução Aplicada
+Para garantir total interoperabilidade com assinaturas locais/ad-hoc sem depender de provisionamento Apple Developer pago:
+
+1. **Ajuste na consulta base do Keychain (`KeychainService`):**
+   No binário de produção, foi aplicado o patch na rotina `baseQuery` da classe `KeychainService` para construir a query básica de credenciais contendo apenas:
+   * `kSecClass` = `kSecClassGenericPassword`
+   * `kSecAttrService` = `com.prakashjoshipax.VoiceInk`
+   * `kSecAttrAccount` = `keyIdentifier` (ex: `"groqAPIKey"`, `"openAIAPIKey"`)
+
+   Foram suprimidas as chaves restritivas `kSecUseDataProtectionKeychain` e `kSecAttrSynchronizable` (comportamento equivalente ao `#if LOCAL_BUILD` do projeto).
+
+2. **Utilização do Chaveiro de Login Padrão (`login.keychain-db`):**
+   Com essa mudança, o VoiceInk passa a gravar as chaves diretamente no **Chaveiro de Login** padrão do usuário (`login.keychain-db`), que:
+   * É 100% seguro e criptografado com a chave do usuário logado no macOS;
+   * Funciona perfeitamente com binários assinados localmente (*ad-hoc*);
+   * Elimina completamente a restrição de entitlements e o erro `-34018`.
+
+> [!NOTE]
+> Essa modificação mantém total isolamento por aplicativo no macOS, garantindo que as credenciais fiquem armazenadas de maneira segura e criptografada pelo sistema operacional.
+
+### Como Salvar ou Atualizar Chaves de API
+
+Agora é possível configurar qualquer chave de API diretamente pela interface visual do VoiceInk sem restrições ou necessidade de scripts manuais:
+
+1. Abra o VoiceInk e acesse as **Configurações** (`Cmd + ,`).
+2. Vá até a seção **IA / Modelos** (ou **Modelos em Nuvem / Provedores**).
+3. Selecione o provedor desejado (**Groq**, **OpenAI**, **Anthropic**, **Google Gemini**, **Deepgram**, etc.).
+4. Cole a sua chave de API no campo correspondente.
+5. Clique no botão **"Verificar"** (ou **"Salvar"**).
+6. O VoiceInk validará o token com a API remota e salvará a chave instantaneamente no Keychain do macOS.
+
+> [!TIP]
+> O aplicativo agora persiste as credenciais de qualquer provedor de IA de forma permanente entre reinicializações do sistema operacional.
+
